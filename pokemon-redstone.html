@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pokémon Redstone</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #121212;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 5px;
+            color: #ffcc03;
+            text-shadow: 2px 2px #3b4cca;
+            font-family: monospace;
+        }
+
+        .subtitle {
+            font-size: 0.9rem;
+            color: #aaaaaa;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 512px;
+            aspect-ratio: 3 / 2;
+            background: #000000;
+            border: 4px solid #333333;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            image-rendering: pixelated;
+        }
+
+        .controls-info {
+            background-color: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 15px;
+            width: 100%;
+            max-width: 512px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .controls-info strong {
+            color: #ffcc03;
+        }
+
+        .mobile-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 512px;
+            margin-top: 20px;
+            padding: 0 10px;
+        }
+
+        .d-pad {
+            display: grid;
+            grid-template-columns: repeat(3, 45px);
+            grid-template-rows: repeat(3, 45px);
+            gap: 3px;
+        }
+
+        .action-group {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .menu-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .action-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 50px);
+            gap: 8px;
+        }
+
+        .btn {
+            background: #2a2a2a;
+            color: #ffffff;
+            border: 2px solid #444444;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.1s;
+        }
+
+        .btn:active {
+            background: #555555;
+            border-color: #ffffff;
+        }
+
+        .btn-menu {
+            font-size: 0.75rem;
+            padding: 5px 10px;
+        }
+
+        .btn-action {
+            height: 50px;
+            border-radius: 50%;
+            background: #a11a1a;
+            border-color: #c93232;
+        }
+
+        .btn-action:active {
+            background: #c93232;
+        }
+
+        @media (min-width: 768px) {
+            .mobile-controls {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Pokémon Redstone</h1>
+    <div class="subtitle">Fan project - Mistura de Pokémon & Survival Blocks</div>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="240" height="160"></canvas>
+    </div>
+
+    <div class="controls-info">
+        <strong>Setas / WASD:</strong> Mover o personagem <br>
+        <strong>Z:</strong> Minerar / Atacar / Conversar (Segurar) <br>
+        <strong>X:</strong> Usar item / Colocar bloco / Comer <br>
+        <strong>Espaço:</strong> Pular | <strong>Shift:</strong> Correr | <strong>E:</strong> Inventário <br>
+        <strong>1–9 / Scroll:</strong> Selecionar Hotbar | <strong>Enter:</strong> Abrir Menu
+    </div>
+
+    <div class="mobile-controls">
+        <div class="d-pad">
+            <div></div><button class="btn" id="up">▲</button><div></div>
+            <button class="btn" id="left">◀</button><div style="background:#222; border-radius:4px;"></div><button class="btn" id="right">▶</button>
+            <div></div><button class="btn" id="down">▼</button><div></div>
+        </div>
+
+        <div class="action-group">
+            <div class="menu-buttons">
+                <button class="btn btn-menu" id="inv">INV</button>
+                <button class="btn btn-menu" id="menu">MENU</button>
+            </div>
+            <div class="action-buttons">
+                <button class="btn btn-action" id="b">B</button>
+                <button class="btn btn-action" id="a">A</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const inputState = {
+            up: false, down: false, left: false, right: false,
+            actionA: false, actionB: false, shift: false, jump: false
+        };
+
+        // Player starting position
+        let playerX = 110;
+        let playerY = 90;
+        const speed = 1.5;
+
+        window.addEventListener('keydown', (e) => handleKey(e.key, true));
+        window.addEventListener('keyup', (e) => handleKey(e.key, false));
+
+        function handleKey(key, isPressed) {
+            switch(key.toLowerCase()) {
+                case 'w': case 'arrowup':    inputState.up = isPressed; break;
+                case 's': case 'arrowdown':  inputState.down = isPressed; break;
+                case 'a': case 'arrowleft':  inputState.left = isPressed; break;
+                case 'd': case 'arrowright': inputState.right = isPressed; break;
+                case 'z':                    inputState.actionA = isPressed; break;
+                case 'x':                    inputState.actionB = isPressed; break;
+                case ' ':                    inputState.jump = isPressed; break;
+                case 'shift':                inputState.shift = isPressed; break;
+            }
+        }
+
+        const mobileButtons = [
+            { id: 'up', action: 'up' },
+            { id: 'down', action: 'down' },
+            { id: 'left', action: 'left' },
+            { id: 'right', action: 'right' },
+            { id: 'a', action: 'actionA' },
+            { id: 'b', action: 'actionB' }
+        ];
+
+        mobileButtons.forEach(btn => {
+            const el = document.getElementById(btn.id);
+            if(el) {
+                el.addEventListener('touchstart', (e) => { e.preventDefault(); inputState[btn.action] = true; });
+                el.addEventListener('touchend', (e) => { e.preventDefault(); inputState[btn.action] = false; });
+                el.addEventListener('mousedown', () => { inputState[btn.action] = true; });
+                el.addEventListener('mouseup', () => { inputState[btn.action] = false; });
+            }
+        });
+
+        function updateGame() {
+            // Update movement based on input state
+            let currentSpeed = inputState.shift ? speed * 1.8 : speed;
+
+            if (inputState.up && playerY > 0) playerY -= currentSpeed;
+            if (inputState.down && playerY < 130) playerY += currentSpeed;
+            if (inputState.left && playerX > 0) playerX -= currentSpeed;
+            if (inputState.right && playerX < 220) playerX += currentSpeed;
+
+            // Render sky
+            ctx.fillStyle = '#4a73a8';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Render ground
+            ctx.fillStyle = '#557a2b';
+            ctx.fillRect(0, 130, canvas.width, 30);
+
+            // Render player (Steve style placeholder)
+            ctx.fillStyle = '#3182b5'; // Blue shirt
+            ctx.fillRect(playerX, playerY, 16, 26);
+            ctx.fillStyle = '#d1a153'; // Skin head
+            ctx.fillRect(playerX + 2, playerY - 8, 12, 8);
+            ctx.fillStyle = '#473216'; // Pants
+            ctx.fillRect(playerX, playerY + 26, 16, 8);
+
+            // Interface overlay text
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '8px monospace';
+            ctx.fillText("Controles Ativos: WASD / Setas", 10, 15);
+            if(inputState.actionA) {
+                ctx.fillStyle = '#ffcc03';
+                ctx.fillText("Minerando / Atacando...", 10, 25);
+            }
+
+            requestAnimationFrame(updateGame);
+        }
+
+        window.addEventListener('load', () => {
+            updateGame();
+            console.log("Interface gráfica iniciada com sucesso.");
+        });
+    </script>
+</body>
+</html>
